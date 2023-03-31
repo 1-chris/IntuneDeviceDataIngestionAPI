@@ -3,9 +3,8 @@ using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-
 // Build the API signature
-static string BuildSignature(string message, string secret)
+string BuildSignature(string message, string secret)
 {
     var encoding = new System.Text.ASCIIEncoding();
     byte[] keyByte = Convert.FromBase64String(secret);
@@ -18,7 +17,7 @@ static string BuildSignature(string message, string secret)
 }
 
 // PostData async
-static async Task PostDataAsync(string signature, string date, string json, string customerId, string LogName)
+async Task PostDataAsync(string signature, string date, string json, string customerId, string LogName)
 {
     try
     {
@@ -46,14 +45,12 @@ static async Task PostDataAsync(string signature, string date, string json, stri
     }
 }
 
-
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 app.UseHttpsRedirection();
 
 string? sharedKey = builder.Configuration["WorkspaceSharedKey"];
 string? customerId = builder.Configuration["WorkspaceCustomerId"];
-string? logTableName = builder.Configuration["WorkspaceTableName"];
 string? clientAuthenticationToken = builder.Configuration["ClientAuthenticationToken"];
 
 app.MapPost("DeviceDataEndpoint", async (dynamic data, HttpContext context) =>
@@ -74,9 +71,32 @@ app.MapPost("DeviceDataEndpoint", async (dynamic data, HttpContext context) =>
     string hashedString = BuildSignature(stringToHash, sharedKey);
     string signature = "SharedKey " + customerId + ":" + hashedString;
 
-    await PostDataAsync(signature, datestring, json, customerId, logTableName);
+    await PostDataAsync(signature, datestring, json, customerId, "DeviceTelemetryBasic");
 
     return Results.Ok();
+});
+
+app.MapPost("DeviceDataEndpointProcess", async (dynamic data, HttpContext context) =>
+{
+    
+        // verify request headers has valid DeviceId header with guid
+        if (!Guid.TryParse(context.Request.Headers["DeviceId"], out Guid deviceId))
+            return Results.Unauthorized();
+    
+        if (context.Request.Headers["Authorization"] != clientAuthenticationToken)
+            return Results.Unauthorized();
+    
+        var json = JsonSerializer.Serialize(data);
+    
+        var datestring = DateTime.UtcNow.ToString("r");
+        var jsonBytes = Encoding.UTF8.GetBytes(json);
+        string stringToHash = "POST\n" + jsonBytes.Length + "\napplication/json\n" + "x-ms-date:" + datestring + "\n/api/logs";
+        string hashedString = BuildSignature(stringToHash, sharedKey);
+        string signature = "SharedKey " + customerId + ":" + hashedString;
+    
+        await PostDataAsync(signature, datestring, json, customerId, "DeviceTelemetryProcess");
+    
+        return Results.Ok();
 });
 
 app.Run();
