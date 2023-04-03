@@ -8,7 +8,7 @@ builder.Services.AddSingleton<LogAnalyticsBackgroundService>();
 builder.Services.AddHostedService(p => p.GetRequiredService<LogAnalyticsBackgroundService>());
 
 var app = builder.Build();
-//app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 
 string? clientAuthenticationToken = builder.Configuration["ClientAuthenticationToken"];
 
@@ -57,14 +57,11 @@ public class LogAnalyticsBackgroundService : BackgroundService
 
     public LogAnalyticsBackgroundService(ILogger<LogAnalyticsBackgroundService> logger, IConfiguration configuration)
     {
-        System.Console.WriteLine("setting up service");
         _logger = logger;
         _configuration = configuration;
 
         CustomerId = _configuration.GetValue<string>("WorkspaceCustomerId");
         SharedKey = _configuration.GetValue<string>("WorkspaceSharedKey");
-
-        System.Console.WriteLine($"{CustomerId} - {SharedKey}");
     }
 
     public void AddSysinfoItem(object item)
@@ -80,7 +77,6 @@ public class LogAnalyticsBackgroundService : BackgroundService
 
     protected async override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        System.Console.WriteLine("Running ExecuteAsync");
         while (!stoppingToken.IsCancellationRequested)
         {
             if (SysinfoItems.Count > 0)
